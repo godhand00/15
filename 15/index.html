@@ -1,0 +1,327 @@
+﻿<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+        <script src="jquery-2.2.3.js" type="text/javascript"></script>
+        <script type="text/javascript">
+$(function() {
+    var mx = 3;   // テーブルのxサイズ
+    var my = 3;   // テーブルのyサイズ
+    var max = mx * my;
+
+    var smax = 32;    // シャッフル回数
+    var scount = 0;   // シャッフルカウンタ
+    var mint = 128;   // シャッフル時のインターバル
+    var sint = 512;   // 結果表示時のインターバル
+    var cur = -1;     // シャッフル時前回の移動先
+    var shuffled = false; // シャッフルしたか
+
+    var num;  // テーブルデータ
+
+    // データ上は0 to max - 1
+    // 表示上は1 to max
+    var T = function(max, n) {
+        if (n < max - 1) {
+            return n + 1;
+        } else {
+            return '';
+        }
+    }
+
+    // テーブルデータを文字列化
+    // ハッシュのキーとして扱いやすくするため
+    var encodeNum = function(num) {
+        var max = num.length;
+        var enc = '';
+        for (var i = 0; i < max - 1; i++) {
+            enc += num[i] + ',';
+        }
+        enc += num[i];
+        return enc;
+    }
+
+    // 文字列からテーブルデータ
+    var decodeNum = function(str) {
+        var nstr = str.split(',');
+        var num = new Array();
+        for (var i = 0; i < nstr.length; i++) {
+            num.push(parseInt(nstr[i]));
+        }
+        return num;
+    }
+
+    // スワッピング
+    var swap = function (num, c, n) {
+        var tmp = num[c];
+        num[c] = num[n];
+        num[n] = tmp;
+    }
+
+    // 移動
+    // 位置idを指定
+    var move = function (mx, num, id) {
+        var max = num.length;
+        if (id - mx >= 0 && num[id - mx] == max - 1) {
+            swap(num, id, id - mx);
+            return id - mx;
+        } else if (id + mx < max && num[id + mx] == max - 1) {
+            swap(num, id, id + mx);
+            return id + mx;
+        } else if (id % mx - 1 >= 0 && num[id - 1] == max - 1) {
+            swap(num, id, id - 1);
+            return id - 1;
+        } else if (id % mx + 1 < mx && num[id + 1] == max - 1) {
+            swap(num, id, id + 1);
+            return id + 1;
+        }
+        return id;
+    }
+
+    //// 移動可能なマスを出力
+    //var getMovable = function(mx, num) {
+    //    var max = num.length;
+    //    var ids = new Array();
+    //    var id = getBlank(num);
+    //    if (id - mx >= 0) {
+    //        ids.push(id - mx);
+    //    }
+    //    if (id + mx < max) {
+    //        ids.push(id + mx);
+    //    }
+    //    if (id % mx - 1 >= 0) {
+    //        ids.push(id - 1);
+    //    }
+    //    if (id % mx + 1 < mx) {
+    //        ids.push(id + 1);
+    //    }
+    //    return ids;
+    //}
+
+    // テーブルhtml作成
+    var tablehtml = function(x, y) {
+        var html = '<table>';
+        for (var i = 0; i < y; i++) {
+            html += '<tr>';
+            for (var j = 0; j < x; j++) {
+                html += '<td><a href="#" class="tile" id="' + (x * i + j) + '"></a></td>';
+            }
+            html += '</tr>';
+        }
+        html += '</table>';
+        return html;
+    }
+
+    // テーブルにデータ表示
+    var disp = function(num) {
+        var max = num.length;
+        for (var i = 0; i < max; i++) {
+            $('#' + i).text(T(max, num[i]));
+        }
+    }
+
+    // 当たり判定
+    var isSuccess = function(num) {
+        var max = num.length;
+        for (var i = 0; i < max; i++) {
+            if (num[i] != i) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ブランクマスを探す
+    var getBlank = function(num) {
+        var max = num.length;
+        for (var i = 0; i < max; i++) {
+            if (num[i] == max - 1) {
+                return i;
+            }
+        }
+    }
+
+    // 適当に移動
+    var randmove = function(num) {
+        var max = num.length;
+        var pre;
+        var pcur;
+        do {
+            while ((pre = Math.floor(Math.random() * max)) == cur) {}
+        } while ((pcur = move(mx, num, pre)) == pre);
+        cur = pcur;
+    }
+
+    // シャッフルする
+    var shuffle = function(num) {
+        randmove(num);
+        disp(num);
+        if (scount > 0) {
+            scount--;
+            setTimeout(shuffle.bind(null, num), mint);
+        } else {
+            shuffled = true;
+            cur = -1;
+        }
+    }
+
+    //var result = function(res, dn, path) {
+    //    for (var a in path) {
+    //        for (var i = 0; i < path[a].length; i++) {
+    //            if (path[a][i] == dn) {
+    //                res.unshift(a);
+    //                result(res, a, path);
+    //            }
+    //        }
+    //    }
+    //}
+
+    // 動かし方を表示
+    var showRes = function(res) {
+        if (res.length > 0) {
+            var dn = res.shift();
+            var num = decodeNum(dn);
+            disp(num);
+            setTimeout(showRes.bind(null, res), sint);
+        }
+    }
+
+    //// 最短の動かし方を見つける．幅優先探索なのでマスが多くなると返ってこない
+    //var solve = function(mx, num) {
+    //    var queue = new Array();
+    //    var visited = new Array();
+    //    var path = new Array();
+
+    //    var dn = encodeNum(num);
+    //    visited[dn] = true;
+    //    queue.push(dn);
+
+    //    while (queue.length > 0) {
+    //        var odn = queue.shift();
+    //        num = decodeNum(odn);
+    //        var mv = getMovable(mx, num);
+    //        for (var i = 0; i < mv.length; i++) {
+    //            num = decodeNum(odn);
+    //            move(mx, num, mv[i]);
+    //            dn = encodeNum(num);
+    //            if (isSuccess(num)) {   // 見つかった！
+    //                var res = new Array();
+    //                res.unshift(dn);
+    //                res.unshift(odn);
+    //                result(res, odn, path);
+    //                return res;
+    //            }
+    //            if (!visited[dn]) {
+    //                visited[dn] = true;
+    //                queue.push(dn);
+    //                if (!path[odn]) {
+    //                    path[odn] = new Array();
+    //                }
+    //                path[odn].push(dn);
+    //            }
+    //        }
+    //    }
+    //    return null;
+    //}
+
+    // 初期化
+    var init = function () {
+        shuffled = false;
+        num = new Array(max); // テーブルデータ
+        for (var i = 0; i < max; i++) {
+            num[i] = i;
+        }
+
+        $('#mx').val(mx);
+        $('#my').val(my);
+        $('#table').html(tablehtml(mx, my));
+        // マスクリックで移動
+        $('.tile').click(function() {
+            move(mx, num, parseInt($(this).attr('id')));
+            disp(num);
+            if(shuffled && isSuccess(num)) {
+                shuffled = false;
+                alert('Congratulations!');
+            }
+        });
+
+        // 表示
+        disp(num);
+    }
+
+    // シャッフルボタン
+    $('#shuffle').click(function() {
+        scount = smax;
+        shuffle(num);
+    });
+
+    // 解くボタン
+    $('#solve').click(function () {
+        $(document.body).css({ 'cursor': 'wait' });
+        var url = "./api/Solve?mx=" + mx + "&jnum=[" + encodeNum(num) + "]";
+        $.get(url)
+        .then(function (data) {
+            $(document.body).css({ 'cursor': 'default' });
+            var res = new Array();
+            for (var i = 0; i < data.length; i++) {
+                res.push(data[i]); // []を取る．
+            }
+            showRes(res);
+        });
+    });
+
+    // 設定変更
+    $('#init').click(function() {
+        try {
+            mx = parseInt($('#mx').val());
+            if (mx < 2) {mx = 2;} else if (mx > 4) {mx = 4;}
+            my = parseInt($('#my').val());
+            if (my < 2) {my = 2;} else if (my > 4) {my = 4;}
+            max = mx * my;
+        } catch (e) {
+            mx = 3;
+            my = 3;
+        }
+        init();
+    });
+
+    // 初期化実行
+    init();
+});
+        </script>
+        <style type="text/css">
+table {
+    border: solid;
+}
+td {
+    width: 48px;
+    height: 48px;
+    border: solid;
+    text-align: center;
+    background-color: blue;
+}
+a {
+    text-decoration: none;
+    color: yellow;
+    font-size: 36px;
+    font-weight: bold;
+}
+input {
+    width: 2em;
+    margin: 6px 2px 6px 2px;
+}
+button {
+    margin: 6px 2px 6px 2px;
+}
+        </style>
+    </head>
+    <body>
+        x <input id="mx" type="text" />
+        y <input id="my" type="text" />
+        (2-4)
+        <button id="init">init</button>
+        <div id="table"></div>
+        <button id="shuffle">shuffle</button>
+        <button id="solve">solve</button>
+        <p>x[n]y[m]でサイズを指定します．[init]で初期化．[shuffle] でバラバラにします．<br/>[solve] で最短手順を示します．タイルをクリックすれば動くので自分で解くこともできます</p>
+    </body>
+</html>
